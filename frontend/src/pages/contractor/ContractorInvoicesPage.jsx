@@ -6,6 +6,7 @@ import WorkflowHistoryPanel from '../../components/WorkflowHistoryPanel.jsx';
 
 import { formatMoney } from '../../utils/format.js';
 import { createInvoice, listAssignedJobs, listInvoices } from '../../services/contractorService.js';
+import { suggestInvoiceItems } from '../../services/aiService.js';
 
 function computeTotal(items) {
   return items.reduce((sum, item) => sum + Number(item.quantity || 0) * Number(item.unitPrice || 0), 0);
@@ -23,6 +24,8 @@ export default function ContractorInvoicesPage() {
   const [notes, setNotes] = useState('');
   const [items, setItems] = useState([{ description: 'Service', quantity: 1, unitPrice: 0 }]);
   const [submitting, setSubmitting] = useState(false);
+
+  const [aiLoading, setAiLoading] = useState(false);
 
   async function refresh() {
     setLoading(true);
@@ -58,6 +61,29 @@ export default function ContractorInvoicesPage() {
 
   function removeItem(idx) {
     setItems((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  async function onAiAssist() {
+    if (!jobId) {
+      setError('Select a job to use AI Assist');
+      return;
+    }
+
+    setAiLoading(true);
+    setError('');
+    try {
+      const data = await suggestInvoiceItems(jobId);
+      const next = (data?.result?.items || []).map((it) => ({
+        description: it.description,
+        quantity: Number(it.quantity || 1),
+        unitPrice: 0,
+      }));
+      if (next.length) setItems(next);
+    } catch (e) {
+      setError(e?.response?.data?.message || 'Failed to get AI invoice suggestions');
+    } finally {
+      setAiLoading(false);
+    }
   }
 
   async function onSubmitInvoice(e) {
@@ -132,10 +158,22 @@ export default function ContractorInvoicesPage() {
           <div>
             <div className="flex items-center justify-between mb-2">
               <div className="text-sm font-bold text-slate-700">Line Items</div>
-              <button type="button" onClick={addItem} className="text-sm text-[#1e5aa0] hover:underline">
-                Add Item
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={onAiAssist}
+                  disabled={aiLoading}
+                  className="text-sm text-slate-900 font-semibold hover:underline disabled:opacity-60"
+                >
+                  {aiLoading ? 'AI...' : 'AI Assist'}
+                </button>
+                <button type="button" onClick={addItem} className="text-sm text-[#1e5aa0] hover:underline">
+                  Add Item
+                </button>
+              </div>
             </div>
+
+            <div className="text-xs text-slate-500 mb-2">AI suggestions are advisory. Review and edit before submitting.</div>
 
             <div className="space-y-2">
               {items.map((it, idx) => (

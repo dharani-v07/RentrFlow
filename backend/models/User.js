@@ -16,6 +16,11 @@ const userSchema = new mongoose.Schema(
     phoneNumber: { type: String, trim: true },
 
     profileImage: { type: String, trim: true },
+
+    resumeUrl: { type: String, trim: true },
+    resumeOriginalName: { type: String, trim: true },
+    resumeUploadedAt: { type: Date },
+
     location: {
       city: { type: String, trim: true },
       state: { type: String, trim: true },

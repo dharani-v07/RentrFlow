@@ -6,6 +6,7 @@ import { useAuth } from '../../state/AuthContext.jsx';
 import { useSocket } from '../../state/SocketContext.jsx';
 
 import { listMessages, markMessagesRead } from '../../services/chatService.js';
+import { summarizeChat } from '../../services/aiService.js';
 
 function safeName(user) {
   if (!user) return 'Unknown';
@@ -21,6 +22,9 @@ export default function JobChatPage() {
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState('');
   const [error, setError] = useState('');
+
+  const [aiSummary, setAiSummary] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
 
   const listRef = useRef(null);
 
@@ -46,6 +50,20 @@ export default function JobChatPage() {
       cancelled = true;
     };
   }, [jobId]);
+
+  async function onSummarize() {
+    if (!jobId) return;
+    setAiLoading(true);
+    setError('');
+    try {
+      const data = await summarizeChat(jobId, 20);
+      setAiSummary(data?.result?.summary || '');
+    } catch (e) {
+      setError(e?.response?.data?.message || 'Failed to summarize chat');
+    } finally {
+      setAiLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (!socket || !jobId) return;
@@ -108,10 +126,27 @@ export default function JobChatPage() {
 
       <div className="flex items-center justify-between">
         <div className="text-xl font-bold text-slate-800">Job Chat</div>
-        <div className="text-xs text-slate-500">{status}</div>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onSummarize}
+            disabled={aiLoading}
+            className="px-3 py-2 rounded-md bg-slate-900 text-white text-xs disabled:opacity-60"
+          >
+            {aiLoading ? 'AI...' : 'Summarize Chat'}
+          </button>
+          <div className="text-xs text-slate-500">{status}</div>
+        </div>
       </div>
 
       <CardBox title={`Chat for Job: ${jobId}`}>
+        {aiSummary ? (
+          <div className="mb-3 p-3 rounded-md bg-slate-50 border border-slate-200">
+            <div className="text-xs text-slate-500">AI Summary (advisory)</div>
+            <div className="text-sm text-slate-800 mt-1">{aiSummary}</div>
+          </div>
+        ) : null}
+
         <div ref={listRef} className="h-[55vh] overflow-y-auto border border-slate-200 rounded-md p-3 bg-white">
           <div className="space-y-2">
             {messages.map((m) => {

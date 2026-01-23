@@ -37,7 +37,6 @@ function buildProfileResponse(user) {
     fullName: user.fullName || user.name,
     email: user.email,
     phoneNumber: user.phoneNumber || user.phone || '',
-    profileImage: user.profileImage || '',
     location: {
       city: user.location?.city || '',
       state: user.location?.state || '',
@@ -93,13 +92,6 @@ async function updateMyProfile(req, res) {
     user.location = user.location || {};
     if (nextCity !== undefined) user.location.city = nextCity;
     if (nextState !== undefined) user.location.state = nextState;
-  }
-
-  if (req.file) {
-    const fileUrl = `/uploads/${path.basename(req.file.path)}`;
-    user.profileImage = fileUrl;
-  } else if (b.profileImage !== undefined) {
-    user.profileImage = clampString(b.profileImage, { max: 500 });
   }
 
   if (user.role === 'contractor') {
@@ -175,7 +167,46 @@ async function updateMyProfile(req, res) {
   res.json({ success: true, profile: buildProfileResponse(user) });
 }
 
+async function uploadMyResume(req, res) {
+  if (!req.file) throw new AppError('Resume file is required', 400);
+
+  const user = req.user;
+
+  const fileUrl = `/uploads/${path.basename(req.file.path)}`;
+  user.resumeUrl = fileUrl;
+  user.resumeOriginalName = req.file.originalname || '';
+  user.resumeUploadedAt = new Date();
+
+  await user.save();
+
+  res.status(201).json({
+    success: true,
+    resume: {
+      resumeUrl: user.resumeUrl || '',
+      resumeOriginalName: user.resumeOriginalName || '',
+      resumeUploadedAt: user.resumeUploadedAt || null,
+    },
+  });
+}
+
+async function getMyResume(req, res) {
+  const user = req.user;
+
+  res.json({
+    success: true,
+    resume: user.resumeUrl
+      ? {
+          resumeUrl: user.resumeUrl,
+          resumeOriginalName: user.resumeOriginalName || '',
+          resumeUploadedAt: user.resumeUploadedAt || null,
+        }
+      : null,
+  });
+}
+
 module.exports = {
   getMyProfile,
   updateMyProfile,
+  uploadMyResume,
+  getMyResume,
 };

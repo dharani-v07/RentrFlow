@@ -5,6 +5,8 @@ import CardBox from '../../components/CardBox.jsx';
 import StatusBadge from '../../components/StatusBadge.jsx';
 import WorkflowHistoryPanel from '../../components/WorkflowHistoryPanel.jsx';
 
+import { predictJobCost, suggestContractors as aiSuggestContractors } from '../../services/aiService.js';
+
 import {
   assignContractor,
   createJob,
@@ -33,6 +35,9 @@ export default function AgentJobsPage() {
   const [budgetAmount, setBudgetAmount] = useState('');
   const [creating, setCreating] = useState(false);
 
+  const [aiBudget, setAiBudget] = useState(null);
+  const [aiBudgetLoading, setAiBudgetLoading] = useState(false);
+
   const [panelJobId, setPanelJobId] = useState(null);
   const [panelJobTitle, setPanelJobTitle] = useState('');
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -45,6 +50,9 @@ export default function AgentJobsPage() {
   const [panelSkills, setPanelSkills] = useState([]);
   const [matchMode, setMatchMode] = useState('none');
 
+  const [aiSuggestions, setAiSuggestions] = useState([]);
+  const [aiSuggestLoading, setAiSuggestLoading] = useState(false);
+
   async function refresh() {
     setLoading(true);
     setError('');
@@ -55,6 +63,21 @@ export default function AgentJobsPage() {
       setError(e?.response?.data?.message || 'Failed to load jobs');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function onAiSuggestContractors() {
+    if (!panelJobId) return;
+    setAiSuggestLoading(true);
+    setError('');
+    try {
+      const data = await aiSuggestContractors(panelJobId);
+      const suggestions = data?.result?.suggestions || [];
+      setAiSuggestions(Array.isArray(suggestions) ? suggestions : []);
+    } catch (e) {
+      setError(e?.response?.data?.message || 'Failed to get AI contractor suggestions');
+    } finally {
+      setAiSuggestLoading(false);
     }
   }
 
@@ -83,11 +106,32 @@ export default function AgentJobsPage() {
       setRequiredSkills('');
       setBudgetAmount('');
       setCreateOpen(false);
+      setAiBudget(null);
       await refresh();
     } catch (err) {
       setError(err?.response?.data?.message || 'Failed to create job');
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function onPredictBudget() {
+    const t = title.trim();
+    const d = description.trim();
+    if (!t || !d) {
+      setError('Enter title and description to get AI suggested budget');
+      return;
+    }
+
+    setAiBudgetLoading(true);
+    setError('');
+    try {
+      const data = await predictJobCost({ title: t, description: d, location: location || undefined, currency: 'INR' });
+      setAiBudget(data?.result?.estimate || null);
+    } catch (e) {
+      setError(e?.response?.data?.message || 'Failed to predict budget');
+    } finally {
+      setAiBudgetLoading(false);
     }
   }
 
@@ -99,6 +143,7 @@ export default function AgentJobsPage() {
     setContractors([]);
     setSearchQ('');
     setAssigningId('');
+    setAiSuggestions([]);
 
     const loc = job.location || '';
     const skills = Array.isArray(job.requiredSkills) ? job.requiredSkills : [];
@@ -239,6 +284,24 @@ export default function AgentJobsPage() {
                 className="mt-1 w-full border border-slate-200 rounded-md px-3 py-2"
                 inputMode="decimal"
               />
+              <div className="mt-2 flex flex-col gap-1">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={onPredictBudget}
+                    disabled={aiBudgetLoading}
+                    className="px-3 py-2 rounded-md bg-slate-900 text-white text-xs disabled:opacity-60"
+                  >
+                    {aiBudgetLoading ? 'AI...' : 'AI Suggest Budget'}
+                  </button>
+                  {aiBudget ? (
+                    <div className="text-xs text-slate-700">
+                      AI Suggested: <span className="font-semibold">{aiBudget.min}–{aiBudget.max} {aiBudget.currency}</span>
+                    </div>
+                  ) : null}
+                </div>
+                {aiBudget?.note ? <div className="text-xs text-slate-500">{aiBudget.note}</div> : null}
+              </div>
             </div>
             <div className="md:col-span-2 flex items-center gap-3">
               <button
@@ -365,6 +428,48 @@ export default function AgentJobsPage() {
 
               <div>
                 <div className="text-sm font-bold text-slate-700 mb-2">Search Contractors</div>
+
+                <div className="mb-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-xs font-semibold text-slate-700">AI Suggestions (advisory)</div>
+                    <button
+                      type="button"
+                      onClick={onAiSuggestContractors}
+                      disabled={aiSuggestLoading}
+                      className="px-2.5 py-1.5 rounded bg-slate-900 text-white text-xs disabled:opacity-60"
+                    >
+                      {aiSuggestLoading ? 'Running...' : 'AI Suggest Contractors'}
+                    </button>
+                  </div>
+
+                  <div className="border border-slate-200 rounded-md overflow-hidden">
+                    {aiSuggestions.length === 0 ? (
+                      <div className="p-3 text-xs text-slate-500">No AI suggestions yet.</div>
+                    ) : (
+                      <div className="divide-y divide-slate-100">
+                        {aiSuggestions.map((s) => (
+                          <div key={s.contractorId} className="p-3 flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="text-sm font-semibold text-slate-800 truncate">
+                                {s.name} <span className="text-xs text-slate-500">({s.score}/100)</span>
+                              </div>
+                              {s.explanation ? <div className="text-xs text-slate-500">{s.explanation}</div> : null}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => onAssign(s.contractorId)}
+                              disabled={assigningId === s.contractorId}
+                              className="px-3 py-2 rounded-md bg-[#1e5aa0] text-white text-xs disabled:opacity-60"
+                            >
+                              {assigningId === s.contractorId ? 'Assigning...' : 'Assign'}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 <div className="flex items-center justify-between gap-3 mb-2">
                   <div className="text-xs text-slate-500">
                     Matching filters:

@@ -69,8 +69,6 @@ export default function ProfileEditPage() {
   const [success, setSuccess] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const [profileImageFile, setProfileImageFile] = useState(null);
-
   const [fullName, setFullName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [city, setCity] = useState('');
@@ -168,13 +166,6 @@ export default function ProfileEditPage() {
       }
     }
 
-    if (profileImageFile && !profileImageFile.type.startsWith('image/')) {
-      return 'Profile image must be an image file';
-    }
-    if (profileImageFile && profileImageFile.size > 3 * 1024 * 1024) {
-      return 'Profile image must be <= 3MB';
-    }
-
     return '';
   }
 
@@ -192,7 +183,6 @@ export default function ProfileEditPage() {
     setSaving(true);
     try {
       const payload = {
-        profileImageFile,
         fullName: fullName.trim(),
         phoneNumber: phoneNumber.trim(),
         bio: bio.trim(),
@@ -284,14 +274,10 @@ export default function ProfileEditPage() {
           </div>
 
           <div>
-            <label className="text-sm text-slate-600">Profile Image (optional)</label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => setProfileImageFile(e.target.files && e.target.files[0] ? e.target.files[0] : null)}
-              className="mt-1 w-full"
-            />
-            <div className="text-xs text-slate-500 mt-1">Max 3MB. Image files only.</div>
+            <label className="text-sm text-slate-600">Resume (PDF)</label>
+            <div className="mt-1 text-xs text-slate-500">
+              Resume upload is available in the Profile page.
+            </div>
           </div>
 
           {isContractor ? (

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 
 import CardBox from '../../components/CardBox.jsx';
 import { useAuth } from '../../state/AuthContext.jsx';
-import { getMyProfile } from '../../services/userService.js';
+import { getMyProfile, getMyResume, uploadMyResume } from '../../services/userService.js';
 
 function chips(values) {
   const list = Array.isArray(values) ? values.filter(Boolean) : [];
@@ -26,6 +26,9 @@ export default function ProfileViewPage() {
   const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
   const [profile, setProfile] = useState(null);
+  const [resume, setResume] = useState(null);
+  const [resumeFile, setResumeFile] = useState(null);
+  const [resumeUploading, setResumeUploading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -42,8 +45,11 @@ export default function ProfileViewPage() {
       setLoading(true);
       setError('');
       try {
-        const data = await getMyProfile();
-        if (!cancelled) setProfile(data.profile);
+        const [p, r] = await Promise.all([getMyProfile(), getMyResume()]);
+        if (!cancelled) {
+          setProfile(p.profile);
+          setResume(r.resume);
+        }
       } catch (e) {
         if (!cancelled) setError(e?.response?.data?.message || 'Failed to load profile');
       } finally {
@@ -58,6 +64,30 @@ export default function ProfileViewPage() {
   }, []);
 
   if (loading) return <div className="text-slate-600">Loading...</div>;
+
+  async function onUploadResume() {
+    if (!resumeFile) return;
+    if (resumeFile.type !== 'application/pdf') {
+      setError('Resume must be a PDF file');
+      return;
+    }
+    if (resumeFile.size > 5 * 1024 * 1024) {
+      setError('Resume must be <= 5MB');
+      return;
+    }
+
+    setResumeUploading(true);
+    setError('');
+    try {
+      const data = await uploadMyResume(resumeFile);
+      setResume(data.resume);
+      setResumeFile(null);
+    } catch (e) {
+      setError(e?.response?.data?.message || 'Failed to upload resume');
+    } finally {
+      setResumeUploading(false);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -77,17 +107,9 @@ export default function ProfileViewPage() {
         <div className="flex flex-col md:flex-row gap-6">
           <div className="w-full md:w-[220px] flex flex-col items-center md:items-start gap-3">
             <div className="w-28 h-28 rounded-full overflow-hidden bg-slate-100 border border-slate-200">
-              {profile?.profileImage ? (
-                <img
-                  src={profile.profileImage.startsWith('/uploads/') ? `${apiBase}${profile.profileImage}` : profile.profileImage}
-                  alt="Profile"
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="w-full h-full grid place-items-center text-slate-400 text-3xl font-bold">
-                  {String(profile?.fullName || profile?.name || user?.name || 'U').slice(0, 1).toUpperCase()}
-                </div>
-              )}
+              <div className="w-full h-full grid place-items-center text-slate-400 text-3xl font-bold">
+                {String(profile?.fullName || profile?.name || user?.name || 'U').slice(0, 1).toUpperCase()}
+              </div>
             </div>
 
             <div className="text-center md:text-left">
@@ -117,6 +139,47 @@ export default function ProfileViewPage() {
               <div className="text-slate-800">{profile?.bio || <span className="text-slate-500">-</span>}</div>
             </div>
           </div>
+        </div>
+      </CardBox>
+
+      <CardBox title="Resume (PDF)">
+        <div className="space-y-3 text-sm">
+          {resume ? (
+            <div className="space-y-1">
+              <div className="text-slate-800 font-semibold">{resume.resumeOriginalName || 'Resume.pdf'}</div>
+              <div className="text-xs text-slate-500">
+                Uploaded: {resume.resumeUploadedAt ? new Date(resume.resumeUploadedAt).toLocaleString() : '-'}
+              </div>
+              <a
+                href={resume.resumeUrl?.startsWith('/uploads/') ? `${apiBase}${resume.resumeUrl}` : resume.resumeUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center px-3 py-2 rounded-md bg-slate-900 text-white text-xs"
+              >
+                View Resume
+              </a>
+            </div>
+          ) : (
+            <div className="text-slate-500">No resume uploaded.</div>
+          )}
+
+          <div className="flex flex-col md:flex-row md:items-center gap-2">
+            <input
+              type="file"
+              accept="application/pdf"
+              onChange={(e) => setResumeFile(e.target.files && e.target.files[0] ? e.target.files[0] : null)}
+              className="w-full"
+            />
+            <button
+              type="button"
+              disabled={!resumeFile || resumeUploading}
+              onClick={onUploadResume}
+              className="px-3 py-2 rounded-md bg-[#1e5aa0] text-white text-xs disabled:opacity-60"
+            >
+              {resumeUploading ? 'Uploading...' : 'Upload Resume'}
+            </button>
+          </div>
+          <div className="text-xs text-slate-500">PDF only. Max 5MB.</div>
         </div>
       </CardBox>
 

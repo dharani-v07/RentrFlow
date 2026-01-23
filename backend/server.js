@@ -23,6 +23,7 @@ const toolsRoutes = require('./routes/toolsRoutes');
 const chatRoutes = require('./routes/chatRoutes');
 const workflowRoutes = require('./routes/workflowRoutes');
 const userRoutes = require('./routes/userRoutes');
+const aiRoutes = require('./routes/aiRoutes');
 
 async function start() {
   await connectDb(process.env.MONGODB_URI);
@@ -68,6 +69,7 @@ async function start() {
   app.use('/api/tools', toolsRoutes);
   app.use('/api/chat', chatRoutes);
   app.use('/api/users', userRoutes);
+  app.use('/api/ai', aiRoutes);
   app.use('/api', workflowRoutes);
 
   app.use(notFound);

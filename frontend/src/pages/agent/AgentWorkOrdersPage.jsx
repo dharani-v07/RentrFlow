@@ -5,6 +5,7 @@ import StatusBadge from '../../components/StatusBadge.jsx';
 import WorkflowHistoryPanel from '../../components/WorkflowHistoryPanel.jsx';
 
 import { listWorkOrders } from '../../services/agentService.js';
+import { generateWorkOrderSummary } from '../../services/aiService.js';
 
 function safeName(user) {
   if (!user) return '-';
@@ -18,6 +19,10 @@ export default function AgentWorkOrdersPage() {
   const [error, setError] = useState('');
   const [historyWorkOrderId, setHistoryWorkOrderId] = useState(null);
   const [status, setStatus] = useState('');
+
+  const [aiWorkOrderId, setAiWorkOrderId] = useState(null);
+  const [aiDraft, setAiDraft] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -40,6 +45,21 @@ export default function AgentWorkOrdersPage() {
       cancelled = true;
     };
   }, []);
+
+  async function onAiDraft(workOrderId) {
+    setAiWorkOrderId(workOrderId);
+    setAiDraft(null);
+    setAiLoading(true);
+    setError('');
+    try {
+      const data = await generateWorkOrderSummary(workOrderId);
+      setAiDraft(data?.result?.summary || null);
+    } catch (e) {
+      setError(e?.response?.data?.message || 'Failed to generate AI draft');
+    } finally {
+      setAiLoading(false);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -90,6 +110,13 @@ export default function AgentWorkOrdersPage() {
                     <td className="px-3 py-3 whitespace-nowrap">
                       <button
                         type="button"
+                        onClick={() => onAiDraft(wo._id)}
+                        className="px-2.5 py-1.5 rounded bg-slate-900 text-white text-xs mr-2"
+                      >
+                        AI Draft
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => setHistoryWorkOrderId(wo._id)}
                         className="px-2.5 py-1.5 rounded bg-[#1e5aa0] text-white text-xs"
                       >
@@ -125,6 +152,52 @@ export default function AgentWorkOrdersPage() {
               </button>
             </div>
             <WorkflowHistoryPanel entityType="WORK_ORDER" entityId={historyWorkOrderId} />
+          </div>
+        </div>
+      ) : null}
+
+      {aiWorkOrderId ? (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+          <div className="bg-white w-full max-w-3xl rounded-lg shadow-2xl p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-lg font-bold text-slate-800">AI Draft (Advisory)</div>
+              <button
+                type="button"
+                onClick={() => {
+                  setAiWorkOrderId(null);
+                  setAiDraft(null);
+                }}
+                className="text-slate-600"
+              >
+                Close
+              </button>
+            </div>
+
+            {aiLoading ? (
+              <div className="text-slate-600">Generating...</div>
+            ) : aiDraft ? (
+              <div className="space-y-3 text-sm">
+                <div>
+                  <div className="text-slate-500 text-xs">Scope</div>
+                  <div className="text-slate-800">{aiDraft.scope}</div>
+                </div>
+                <div>
+                  <div className="text-slate-500 text-xs">Key Tasks</div>
+                  <div className="text-slate-800">
+                    {(aiDraft.keyTasks || []).map((t, idx) => (
+                      <div key={idx}>- {t}</div>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-slate-500 text-xs">Expected Outcome</div>
+                  <div className="text-slate-800">{aiDraft.expectedOutcome}</div>
+                </div>
+                <div className="text-xs text-slate-500">This is a suggestion only. You decide what to use.</div>
+              </div>
+            ) : (
+              <div className="text-slate-500">No draft available.</div>
+            )}
           </div>
         </div>
       ) : null}
